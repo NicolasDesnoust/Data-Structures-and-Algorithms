@@ -3,36 +3,34 @@ package io.github.nicolasdesnoust.islandcounter;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class IslandCounter {
 
     public static final int NO_ISLANDS = 0;
-    public static final int ISLAND_PART = 1;
 
-    public int countNumberOfIslandsIn(int[][] matrix) {
+    public int countNumberOfIslandsIn(int[][] area) {
 
-        if (matrix == null) {
+        if (area == null) {
             return NO_ISLANDS;
         }
 
         int numberOfIslands = NO_ISLANDS;
-        int matrixHeight = matrix.length;
-        int matrixWidth = matrix.length == 0 ? 0 : matrix[0].length;
-        boolean[][] visitedCells = new boolean[matrixHeight][matrixWidth];
+        var explorableArea = new ExplorableArea(area);
+        var tracker = ExplorationTracker.createTrackerFor(explorableArea);
 
-        for (int y = 0; y < matrix.length; y++) {
-            for (int x = 0; x < matrix[y].length; x++) {
-                if (visitedCells[y][x]) {
+        for (int y = 0; y < explorableArea.getHeight(); y++) {
+            for (int x = 0; x < explorableArea.getWidth(); x++) {
+                Coordinates currentCellCoordinates = new Coordinates(x, y);
+
+                if (tracker.hasCoordinatesBeenExplored(currentCellCoordinates)) {
                     continue;
                 }
-                visitedCells[y][x] = true;
+                tracker.markAsExplored(currentCellCoordinates);
 
-                if (matrix[y][x] == ISLAND_PART) {
+                if (explorableArea.isThereLandAt(currentCellCoordinates)) {
                     numberOfIslands++;
-                    Coordinates firstIslandPart = new Coordinates(x, y);
-                    visitWholeIslandSurface(firstIslandPart, matrix, visitedCells);
+                    exploreWholeIslandSurface(currentCellCoordinates, explorableArea, tracker);
                 }
             }
         }
@@ -40,48 +38,37 @@ public class IslandCounter {
         return numberOfIslands;
     }
 
-    private void visitWholeIslandSurface(Coordinates firstIslandPart, int[][] matrix, boolean[][] visitedCells) {
-        Deque<Coordinates> islandPartsToVisit = new ArrayDeque<>();
-        islandPartsToVisit.add(firstIslandPart);
+    private void exploreWholeIslandSurface(
+            Coordinates firstIslandPart,
+            ExplorableArea area,
+            ExplorationTracker tracker
+    ) {
+        Deque<Coordinates> islandPartsToExplore = new ArrayDeque<>();
+        islandPartsToExplore.add(firstIslandPart);
 
-        while (!islandPartsToVisit.isEmpty()) {
-            Coordinates currentIslandPart = islandPartsToVisit.pop();
-            List<Coordinates> surroundingIslandParts = getUnvisitedSurroundingIslandParts(
+        while (!islandPartsToExplore.isEmpty()) {
+            Coordinates currentIslandPart = islandPartsToExplore.pop();
+            List<Coordinates> unexploredSurroundingIslandParts = getUnexploredSurroundingIslandParts(
                     currentIslandPart,
-                    matrix,
-                    visitedCells
+                    area,
+                    tracker
             );
-            islandPartsToVisit.addAll(surroundingIslandParts);
-            visitedCells[currentIslandPart.getY()][currentIslandPart.getX()] = true;
+            islandPartsToExplore.addAll(unexploredSurroundingIslandParts);
+            tracker.markAsExplored(currentIslandPart);
         }
     }
 
-    private List<Coordinates> getUnvisitedSurroundingIslandParts(
-            Coordinates coordinates,
-            int[][] matrix,
-            boolean[][] visitedCells
+    private List<Coordinates> getUnexploredSurroundingIslandParts(
+            Coordinates startingCoordinates,
+            ExplorableArea area,
+            ExplorationTracker tracker
     ) {
-        return coordinates.getAllSurroundingCoordinates()
+        return startingCoordinates.getAllSurroundingCoordinates()
                 .stream()
-                .filter(isNotOutOfBounds(matrix))
-                .filter(isAnIslandPart(matrix))
-                .filter(hasNeverBeenVisited(visitedCells))
+                .filter(area::contains)
+                .filter(area::isThereLandAt)
+                .filter(tracker::hasCoordinatesBeenExplored)
                 .collect(Collectors.toList());
-    }
-
-    private Predicate<Coordinates> hasNeverBeenVisited(boolean[][] visitedCells) {
-        return coordinates -> !visitedCells[coordinates.getY()][coordinates.getX()];
-    }
-
-    private Predicate<Coordinates> isAnIslandPart(int[][] matrix) {
-        return coordinates -> matrix[coordinates.getY()][coordinates.getX()] == ISLAND_PART;
-    }
-
-    private Predicate<Coordinates> isNotOutOfBounds(int[][] matrix) {
-        return coordinates -> coordinates.getY() >= 0
-                && coordinates.getY() < matrix.length
-                && coordinates.getX() >= 0
-                && coordinates.getX() < matrix[coordinates.getY()].length;
     }
 
 }
